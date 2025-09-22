@@ -1,0 +1,127 @@
+image_root: '/home/weifeng/x2vlm/data/PAB/'
+test_file: '/home/weifeng/x2vlm/data/PAB/annotation/test/attr.json'
+
+train_file:  [
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_0.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_1.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_2.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_3.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_4.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_5.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_6.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_7.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_8.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_9.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_10.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_11.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_12.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_13.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_14.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_15.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_16.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_17.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_18.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_19.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_20.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_21.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_22.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_23.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_24.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_25.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_26.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_27.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_28.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_29.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_30.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_31.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_32.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_33.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_34.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_35.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_36.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_37.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_38.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_39.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_40.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_41.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_42.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_43.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_44.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_45.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_46.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_47.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_48.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_49.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_50.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_51.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_52.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_53.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_54.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_55.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_56.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_57.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_58.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_59.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_60.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_61.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_62.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_63.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_64.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_65.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_66.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_67.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_68.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_69.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_70.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_71.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_72.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_73.json',
+    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_74.json',
+]
+
+
+## Image Encoder
+vision_config: 'configs/config_beit2_base.json'
+image_res: 224
+patch_size: 16
+local_attn_depth: -1
+h: 224
+w: 224
+
+## Text Encoder
+text_config: 'configs/config_bert_xlvm2.json'
+text_encoder: '/home/weifeng/x2vlm/checkpoint/bert-base-uncased/'
+# text_encoder: '/home/jizheng/CMP_Baseline_Code/checkpointxvlm/GeoText1652_model/bert'
+# text_num_hidden_layers: 18  # include cross
+# text_fusion_start_at: 12
+
+## Training
+load_params: False
+load_pretrained: True
+
+max_words: 56
+max_tokens: 56
+eda_p: 1
+erasing_p: 0.6
+
+batch_size_train: 64
+batch_size_test: 44
+batch_size_test_text: 150
+
+embed_dim: 2048
+itc_dp: 0.5
+temp: 0.07
+label_smooth: 0.2
+
+## mlm loss
+mask_prob: 0.25
+max_masks: 10
+skipgram_prb: 0.2
+skipgram_size: 3
+mask_whole_word: True
+
+optimizer: {opt: adamW, lr: 1e-4, weight_decay: 0.01, lr_mult: 2}
+schedular: {sched: step, lr: 1e-4, epochs: 10, num_warmup_steps: 500}
+
+k_test: 128
+

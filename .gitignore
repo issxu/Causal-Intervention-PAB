@@ -1,0 +1,30 @@
+# Python Caches
+__pycache__/
+*.pyc
+
+# Python Environment (如果你的环境文件夹在项目内)
+# 比如你的环境名叫 xvlm/
+xvlm/
+
+# Large Data Files (非常重要！)
+# 忽略所有数据文件夹和数据文件
+data/
+*.json
+*.jsonl
+*.jpg
+*.png
+
+# Model Checkpoints (非常重要！)
+# 忽略所有模型权重文件
+checkpoint/
+*.pth
+*.th
+
+# Output & Log directories
+output/
+results*/
+
+# IDE and OS specific files
+.vscode/
+.idea/
+.DS_Store

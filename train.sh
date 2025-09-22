@@ -1,0 +1,1 @@
+python3 run.py --task "my_more_more" --dist "f3" --output_dir "output/my_ori" --checkpoint "checkpointxvlm/16m_base_model_state_step_199999.th"

@@ -1,0 +1,1 @@
+python3 run_xvlm2.py --task "my_more_more_xvlm2" --dist "gpu0" --output_dir "output/0.1Mdata" --checkpoint "/home/weifeng/x2vlm/checkpoint/x2vlm_base_1b.th"

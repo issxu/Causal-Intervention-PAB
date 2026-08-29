@@ -1,0 +1,1 @@
+python3 run_xvlm2.py --task "compare" --dist "gpu1" --output_dir "output/1caption_5epoch_train" --checkpoint "/data2/weifeng/x2vlm/checkpoint/x2vlm_base_1b.th"

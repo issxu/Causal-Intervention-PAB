@@ -1,14 +1,14 @@
-# === ??????? CUHK-PEDES ? reid_raw.json ????? search_dataset.py ===
-
 import os
 import random
-import json
+from random import randint, shuffle
+from random import random as rand
+import numpy as np
 from PIL import Image
+from collections import defaultdict
 from torch.utils.data import Dataset
-from random import randint, shuffle, random as rand
-from dataset.utils import pre_caption
 
-# TextMaskingGenerator ?????,??????????
+from dataset.utils import pre_caption, read_json_to_list
+
 class TextMaskingGenerator:
     def __init__(self, tokenizer, mask_prob, mask_max, skipgram_prb=0.2, skipgram_size=3, mask_whole_word=True,
                  use_roberta=False):
@@ -95,30 +95,36 @@ class TextMaskingGenerator:
                 text_ids[pos] = self.get_random_word()
 
         return text_ids, masked_pos
-        
+
+
 class search_train_dataset(Dataset):
     def __init__(self, config, transform):
         self.image_root = config['image_root']
         self.transform = transform
         self.max_words = config['max_words']
         
-        # ??? ???:???? ann_file ???
-        with open(config['ann_file'], 'r') as f:
-            all_ann = json.load(f)
+        # [NEW] ?? EDA ??,??? 0?
+        # ??? 0,???????? text_eda (??????),?????
+        self.eda_p = config.get('eda_p', 0) 
 
-        # ??? ???:??? 'train' ?? ???
-        self.ann = [item for item in all_ann if item['split'] == 'train']
+        # --- 1. ???? ---
+        ann_file_list = config['train_file']
+        self.ann = []
+        for f in ann_file_list:
+            self.ann += read_json_to_list(f)
         
-        print(f"Loaded CUHK-PEDES train set: {len(self.ann)} samples.")
+        print(f"Total training samples (unique images): {len(self.ann)}")
+        print(f"EDA Probability: {self.eda_p}")
 
-        # ??? ???:img_ids ?ReID????? person_id ???
+        # --- 2. ?? image_id ?? ---
         self.img_ids = {}
         n = 0
-        for ann_item in self.ann:
-            img_id = ann_item['id'] # 'id' ???? person_id
+        for item in self.ann:
+            img_id = item['image_id']
             if img_id not in self.img_ids:
                 self.img_ids[img_id] = n
                 n += 1
+        print('Total unique image_ids:', n)
 
     def __len__(self):
         return len(self.ann)
@@ -126,66 +132,88 @@ class search_train_dataset(Dataset):
     def __getitem__(self, index):
         ann = self.ann[index]
         
-        image_path = os.path.join(self.image_root, ann['file_path'])
+        # --- 1. ???? ---
+        image_path = os.path.join(self.image_root, ann['image'])
         image = Image.open(image_path).convert('RGB')
         image = self.transform(image)
-
-        # ??? ??:???caption??????? ???
-        cap = random.choice(ann['captions'])
-        caption = pre_caption(cap, self.max_words)
         
-        # caption_eda ? eda_p=0 ?????,?????caption??
-        caption_eda = caption
+        # --- 2. ????? ---
+        if 'captions_list' in ann and len(ann['captions_list']) > 0:
+            caption_raw = random.choice(ann['captions_list'])
+        elif isinstance(ann['caption'], list):
+            caption_raw = random.choice(ann['caption'])
+        else:
+            caption_raw = ann['caption']
+            
+        caption_pos = pre_caption(caption_raw, self.max_words)
+        
+        # [NEW] ?? EDA ??
+        # ?? config ? eda_p=0,??? caption_eda ??? caption_pos
+        # ????????,?????? forward ??????
+        #this is cancelled in 12.27 for reconstruction about eda
+        #caption_eda = pre_caption(caption_raw, self.max_words, True, self.eda_p)
+        
+        # --- 3. ????? (TCL ??) ---
+        # 4.19??,???2???????,???eda????????
+        neg_act_raw = ann.get('negative_action', caption_raw)
+        neg_app_raw = ann.get('negative_appearance', caption_raw)
+        
+        caption_neg_act = pre_caption(neg_act_raw, self.max_words)
+        caption_neg_app = pre_caption(neg_app_raw, self.max_words)
 
-        # ???????????? (train_xvlm2.py) ???4????
-        return image, caption, caption_eda, ann['id']
+        img_id = ann['image_id']
+
+        # [NEW] ?? 6 ???:?,??,EDA?,??1,??2,ID
+        return image, caption_pos, caption_neg_act, caption_neg_app, self.img_ids[img_id]
+        #return image, caption_pos, caption_eda, self.img_ids[img_id]
 
 
 class search_test_dataset(Dataset):
+    # ???????????????
     def __init__(self, config, transform):
-        self.image_root = config['image_root']
+        ann_file = config['test_file']
         self.transform = transform
+        self.image_root = config.get('image_root_test', config['image_root'])
         self.max_words = config['max_words']
 
-        # ??? ???:???? ann_file ???
-        with open(config['ann_file'], 'r') as f:
-            all_ann = json.load(f)
+        self.ann = read_json_to_list(ann_file)
 
-        # ??? ???:??? 'test' ?? ???
-        self.ann = [item for item in all_ann if item['split'] == 'test']
+        self.be_pose_img = config.get('be_pose_img', False)
+        print('test dataset -->    be_pose_img:', self.be_pose_img)
 
-        # ??? ???:?? gallery ? query ???
-        self.text = []      # ??????
-        self.image = []     # ????????
-        self.q_pids = []    # ????????? person id
-        self.g_pids = []    # ????????? person id
+        self.text = []
+        self.image = []
+        self.g_pids = []
+        self.q_pids = []
         
-        gallery_images = {} # ?????
-        for ann_item in self.ann:
-            gallery_images[ann_item['file_path']] = ann_item['id']
-
-        self.image = sorted(gallery_images.keys())
-        self.g_pids = [gallery_images[path] for path in self.image]
-
-        for ann_item in self.ann:
-            person_id = ann_item['id']
-            for caption in ann_item['captions']:
+        for img_id, ann in enumerate(self.ann):
+            self.g_pids.append(ann['image_id'])
+            self.image.append(ann['image'])
+            
+            captions = ann.get('captions_list', ann.get('caption'))
+            if isinstance(captions, str):
+                captions = [captions]
+            
+            for caption in captions:
+                self.q_pids.append(ann['image_id'])
                 self.text.append(pre_caption(caption, self.max_words))
-                self.q_pids.append(person_id)
 
-        print(f"Loaded CUHK-PEDES test set:")
-        print(f"  - Gallery size (unique images): {len(self.image)}")
-        print(f"  - Query size (total captions): {len(self.text)}")
-    
     def __len__(self):
-        # ???,????????(gallery)
         return len(self.image)
 
     def __getitem__(self, index):
-        image_path = os.path.join(self.image_root, self.image[index])
+        image_path = os.path.join(self.image_root, self.ann[index]['image'])
         image = Image.open(image_path).convert('RGB')
         image = self.transform(image)
-        
-        # ???? eval.py ?? evaluation_itc ???3????
-        # (image, pose, img_id) -> ???????????
-        return image, {}, index
+
+        if self.be_pose_img:
+            pose_path = os.path.join(self.image_root, 'pose/' + self.ann[index]['image'])
+            try:
+                pose = Image.open(pose_path).convert('RGB')
+                pose = self.transform(pose)
+            except Exception:
+                pose = torch.zeros_like(image)
+        else:
+            pose = 0
+
+        return image, pose, index

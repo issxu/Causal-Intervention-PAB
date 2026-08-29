@@ -1,66 +1,130 @@
 import os
 import argparse
+import socket
+from contextlib import closing
 
 
-# Set it correctly for distributed training across nodes
-NNODES = 1
-NODE_RANK = 0
-MASTER_ADDR = '127.0.0.1'
-MASTER_PORT = 1666  # 0~65536
-NPROC_PER_NODE = 3  # e.g. 4 gpus
+# =========================
+# Cluster / Distributed setup
+# =========================
 
-print("NNODES, ", NNODES)
-print("NODE_RANK, ", NODE_RANK)
-print("MASTER_ADDR, ", MASTER_ADDR)
-print("MASTER_PORT, ", MASTER_PORT)
-print("NPROC_PER_NODE, ", NPROC_PER_NODE)
+def find_free_port():
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(('', 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
 
+
+MASTER_ADDR = os.environ.get("MASTER_ADDR", "127.0.0.1")
+MASTER_PORT = os.environ.get("MASTER_PORT", str(find_free_port()))
+NNODES = int(os.environ.get("NNODES", "1"))
+NODE_RANK = int(os.environ.get("NODE_RANK", "0"))
+
+# Slurm ???? GPU ??(????)
+WORLD_SIZE = int(
+    os.environ.get(
+        "SLURM_NTASKS",
+        os.environ.get("WORLD_SIZE", "1")
+    )
+)
+
+print("========== Distributed Info ==========")
+print("MASTER_ADDR:", MASTER_ADDR)
+print("MASTER_PORT:", MASTER_PORT)
+print("NNODES:", NNODES)
+print("NODE_RANK:", NODE_RANK)
+print("WORLD_SIZE:", WORLD_SIZE)
+print("=======================================")
+
+
+# =========================
+# Launch builder (CLEAN VERSION)
+# =========================
 
 def get_dist_launch(args):
-    if args.dist == 'f4':
-        return "CUDA_VISIBLE_DEVICES=0,1,2,3 WORLD_SIZE=4 python3 -m torch.distributed.run --nproc_per_node=4 " \
-               "--nnodes={:} --node_rank={:} " \
-               "--master_addr={:} --master_port={:} ".format(NNODES, NODE_RANK, MASTER_ADDR, MASTER_PORT)
-    elif args.dist == 'f3':
-        return "CUDA_VISIBLE_DEVICES=0,1,2 WORLD_SIZE=3 python3 -m torch.distributed.run --nproc_per_node=3 " \
-               "--nnodes={:} --node_rank={:} " \
-               "--master_addr={:} --master_port={:} ".format(NNODES, NODE_RANK, MASTER_ADDR, MASTER_PORT)
-    elif args.dist.startswith('gpu'):  # use one gpu, --dist "gpu0"
-        num = int(args.dist[3:])
-        return "CUDA_VISIBLE_DEVICES={:} WORLD_SIZE=1 python3 -m torch.distributed.run --nproc_per_node=1 " \
-               "--nnodes={:} --node_rank={:} " \
-               "--master_addr={:} --master_port={:} ".format(num, NNODES, NODE_RANK, MASTER_ADDR, MASTER_PORT)
-    else:
-        raise ValueError
+    """
+    No CUDA_VISIBLE_DEVICES anymore.
+    Fully rely on Slurm / torchrun.
+    """
 
+    # ?? / ????
+    if args.dist == "auto" or WORLD_SIZE == 1:
+        return (
+            "torchrun "
+            "--standalone "
+            "--nproc_per_node=1 "
+            f"--master_addr={MASTER_ADDR} "
+            f"--master_port={MASTER_PORT} "
+        )
+
+    # ?????(??)
+    return (
+        "torchrun "
+        f"--nproc_per_node={WORLD_SIZE} "
+        f"--nnodes={NNODES} "
+        f"--node_rank={NODE_RANK} "
+        f"--master_addr={MASTER_ADDR} "
+        f"--master_port={MASTER_PORT} "
+    )
+
+
+# =========================
+# Main run
+# =========================
 
 def run(args):
-    if args.task in ['baseline', 'cmp', 'my', 'my_test', 'my_more', 'my_more_more_xvlm2']:
-        args.config = 'configs/' + args.task + '.yaml'
-        print(args.task, args.config)
+    config_path = os.path.join("configs", f"{args.task}.yaml")
 
-        dist_launch = get_dist_launch(args)
-        os.system(
-            f"{dist_launch} Search_xvlm2.py --config {args.config} --task {args.task} --output_dir {args.output_dir} "
-            f"--checkpoint {args.checkpoint} --bs {args.bs} --epo {args.epo} --lr {args.lr} --seed {args.seed} "
-            f"{'--evaluate' if args.evaluate else ''}")
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(
+            f"Config file not found: {config_path}. "
+            f"Please ensure configs/{args.task}.yaml exists."
+        )
 
-    else:
-        raise NotImplementedError(f"task == {args.task}")
+    print(f"[INFO] Task: {args.task}")
+    print(f"[INFO] Config: {config_path}")
+
+    dist_launch = get_dist_launch(args)
+
+    command = (
+        f"{dist_launch} Search_xvlm2.py "
+        f"--config {config_path} "
+        f"--task {args.task} "
+        f"--output_dir {args.output_dir} "
+        f"--checkpoint {args.checkpoint} "
+        f"--bs {args.bs} "
+        f"--epo {args.epo} "
+        f"--lr {args.lr} "
+        f"--seed {args.seed} "
+        f"{'--evaluate' if args.evaluate else ''}"
+    )
+
+    print("\n========== Launch Command ==========")
+    print(command)
+    print("====================================\n")
+
+    os.system(command)
 
 
-if __name__ == '__main__':
+# =========================
+# Entry
+# =========================
 
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task', default='cmp', type=str)
-    parser.add_argument('--dist', default='f4', type=str, help="see func get_dist_launch for details")
-    parser.add_argument('--output_dir', default='out/cmp', type=str, help='local path')
-    parser.add_argument('--checkpoint', default='checkpoint/pretrained.pth', type=str)
-    parser.add_argument('--bs', default=0, type=int, help="mini batch size")
-    parser.add_argument('--epo', default=0, type=int, help="epoch")
+
+    parser.add_argument('--task', default='pab', type=str)
+    parser.add_argument('--dist', default='auto', type=str, help="auto = cluster safe mode")
+
+    parser.add_argument('--output_dir', default='output/default_run', type=str)
+    parser.add_argument('--checkpoint', default='checkpoint/x2vlm_base_1b.th', type=str)
+
+    parser.add_argument('--bs', default=0, type=int)
+    parser.add_argument('--epo', default=0, type=int)
     parser.add_argument('--lr', default=0.0, type=float)
     parser.add_argument('--seed', default=3407, type=int)
-    parser.add_argument('--evaluate', action='store_true', help="directly evaluation")
-    args = parser.parse_args()
 
+    parser.add_argument('--evaluate', action='store_true')
+
+    args = parser.parse_args()
     run(args)

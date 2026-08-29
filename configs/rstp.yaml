@@ -1,0 +1,50 @@
+# ??? ????RSTPReid????????? ???
+image_root: '/home/user/mc56486/data/RSTPReid/imgs/'
+
+# ??? ?????????? ???
+annotation_file: '/home/user/mc56486/data/RSTPReid/data_captions.json'
+
+## Image Encoder
+vision_config: 'configs/config_beit2_base.json'
+image_res: 224
+patch_size: 16
+local_attn_depth: -1
+h: 224
+w: 224
+
+## Text Encoder
+text_config: 'configs/config_bert_xlvm2.json'
+text_encoder: '/home/user/mc56486/bert-base-uncased/'
+# text_encoder: '/home/jizheng/CMP_Baseline_Code/checkpointxvlm/GeoText1652_model/bert'
+#text_num_hidden_layers: 18  # include cross
+#text_fusion_start_at: 12
+
+## Training
+load_params: False
+load_pretrained: True
+
+max_words: 80
+max_tokens: 80
+eda_p: 0
+erasing_p: 0.3
+
+batch_size_train: 120
+batch_size_test: 160
+batch_size_test_text: 150
+
+embed_dim: 2048
+itc_dp: 0.5
+temp: 0.07
+label_smooth: 0.2
+
+## mlm loss
+mask_prob: 0.25
+max_masks: 10
+skipgram_prb: 0.2
+skipgram_size: 3
+mask_whole_word: True
+
+optimizer: {opt: adamW, lr: 1e-4, weight_decay: 0.01, lr_mult: 2}
+schedular: {sched: step, lr: 1e-5, epochs: 100, num_warmup_steps: 500}
+
+k_test: 128

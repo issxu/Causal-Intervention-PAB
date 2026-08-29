@@ -1,14 +1,14 @@
-# === ??????? CUHK-PEDES ? reid_raw.json ????? search_dataset.py ===
-
 import os
 import random
-import json
+from random import randint, shuffle
+from random import random as rand
+import numpy as np
 from PIL import Image
+from collections import defaultdict
 from torch.utils.data import Dataset
-from random import randint, shuffle, random as rand
-from dataset.utils import pre_caption
 
-# TextMaskingGenerator ?????,??????????
+from dataset.utils import pre_caption, read_json_to_list
+
 class TextMaskingGenerator:
     def __init__(self, tokenizer, mask_prob, mask_max, skipgram_prb=0.2, skipgram_size=3, mask_whole_word=True,
                  use_roberta=False):
@@ -96,96 +96,112 @@ class TextMaskingGenerator:
 
         return text_ids, masked_pos
         
+        
+        
+        
 class search_train_dataset(Dataset):
     def __init__(self, config, transform):
         self.image_root = config['image_root']
         self.transform = transform
         self.max_words = config['max_words']
-        
-        # ??? ???:???? ann_file ???
-        with open(config['ann_file'], 'r') as f:
-            all_ann = json.load(f)
+        self.eda_p = config['eda_p']
 
-        # ??? ???:??? 'train' ?? ???
-        self.ann = [item for item in all_ann if item['split'] == 'train']
+        ann_file_list = config['train_file']
         
-        print(f"Loaded CUHK-PEDES train set: {len(self.ann)} samples.")
+        # --- ??? ?????? V2.0 ??? ---
+        
+        # 1. ??????? image ???????????
+        self.ann_by_image = defaultdict(list)
+        # 2. ??,?????????????? annotation ??
+        self.ann = []
+        
+        for f in ann_file_list:
+            anns = read_json_to_list(f)
+            for item in anns:
+                self.ann.append(item) # ???????????
+                self.ann_by_image[item['image']].append(item) # ??????
+        
+        print(f"Total annotations (lines): {len(self.ann)}")
+        print(f"Total unique images: {len(self.ann_by_image)}")
 
-        # ??? ???:img_ids ?ReID????? person_id ???
+        # --- img_ids ????????? ---
         self.img_ids = {}
         n = 0
+        # ??:???????? ann ????? image_id ????
         for ann_item in self.ann:
-            img_id = ann_item['id'] # 'id' ???? person_id
+            img_id = ann_item['image_id']
             if img_id not in self.img_ids:
                 self.img_ids[img_id] = n
                 n += 1
+        print('Total unique image_ids:', n)
+
 
     def __len__(self):
+        # ??? ????:????????????,????????!???
         return len(self.ann)
 
     def __getitem__(self, index):
-        ann = self.ann[index]
+        # 1. ????????? annotation ?,?????????????????????
+        ann_for_path = self.ann[index]
+        image_path_key = ann_for_path['image']
         
-        image_path = os.path.join(self.image_root, ann['file_path'])
+        # 2. ??? ??????? ???
+        # ????????????,????????????caption???,????????
+        ann = random.choice(self.ann_by_image[image_path_key])
+        
+        # --- 3. ???????????,???????????? ann ---
+        
+        image_path = os.path.join(self.image_root, ann['image'])
         image = Image.open(image_path).convert('RGB')
         image = self.transform(image)
 
-        # ??? ??:???caption??????? ???
-        cap = random.choice(ann['captions'])
+        img_id = ann['image_id']
+
+        # ?? caption ????
+        cap = ann['caption']
         caption = pre_caption(cap, self.max_words)
+        caption_eda = pre_caption(cap, self.max_words, True, self.eda_p)
+
+        # ?????????????,??? pose ? hard negative
+        # ????,??????????8????????
+        return image, caption, caption_eda, self.img_ids[img_id]
         
-        # caption_eda ? eda_p=0 ?????,?????caption??
-        caption_eda = caption
-
-        # ???????????? (train_xvlm2.py) ???4????
-        return image, caption, caption_eda, ann['id']
-
-
 class search_test_dataset(Dataset):
     def __init__(self, config, transform):
-        self.image_root = config['image_root']
+        ann_file = config['test_file']
         self.transform = transform
+        self.image_root = config.get('image_root_test', config['image_root'])
         self.max_words = config['max_words']
 
-        # ??? ???:???? ann_file ???
-        with open(config['ann_file'], 'r') as f:
-            all_ann = json.load(f)
+        self.ann = read_json_to_list(ann_file)
 
-        # ??? ???:??? 'test' ?? ???
-        self.ann = [item for item in all_ann if item['split'] == 'test']
+        self.be_pose_img = config.get('be_pose_img', False)
+        print('test dataset -->    be_pose_img:', self.be_pose_img)
 
-        # ??? ???:?? gallery ? query ???
-        self.text = []      # ??????
-        self.image = []     # ????????
-        self.q_pids = []    # ????????? person id
-        self.g_pids = []    # ????????? person id
-        
-        gallery_images = {} # ?????
-        for ann_item in self.ann:
-            gallery_images[ann_item['file_path']] = ann_item['id']
-
-        self.image = sorted(gallery_images.keys())
-        self.g_pids = [gallery_images[path] for path in self.image]
-
-        for ann_item in self.ann:
-            person_id = ann_item['id']
-            for caption in ann_item['captions']:
+        self.text = []
+        self.image = []
+        self.g_pids = []
+        self.q_pids = []
+        for img_id, ann in enumerate(self.ann):
+            self.g_pids.append(ann['image_id'])
+            self.image.append(ann['image'])
+            for i, caption in enumerate(ann['caption']):
+                self.q_pids.append(ann['image_id'])
                 self.text.append(pre_caption(caption, self.max_words))
-                self.q_pids.append(person_id)
 
-        print(f"Loaded CUHK-PEDES test set:")
-        print(f"  - Gallery size (unique images): {len(self.image)}")
-        print(f"  - Query size (total captions): {len(self.text)}")
-    
     def __len__(self):
-        # ???,????????(gallery)
         return len(self.image)
 
     def __getitem__(self, index):
-        image_path = os.path.join(self.image_root, self.image[index])
+        image_path = os.path.join(self.image_root, self.ann[index]['image'])
         image = Image.open(image_path).convert('RGB')
         image = self.transform(image)
-        
-        # ???? eval.py ?? evaluation_itc ???3????
-        # (image, pose, img_id) -> ???????????
-        return image, {}, index
+
+        if self.be_pose_img:
+            pose_path = os.path.join(self.image_root, 'pose/' + self.ann[index]['image'])
+            pose = Image.open(pose_path).convert('RGB')
+            pose = self.transform(pose)
+        else:
+            pose = {}
+
+        return image, pose, index

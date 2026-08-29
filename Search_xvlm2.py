@@ -28,7 +28,8 @@ from scheduler import create_scheduler
 from optim import create_optimizer
 
 from train_xvlm2 import train_model
-from eval import evaluation_itm, evaluation_itc, mAP
+# Import restored eval functions
+from eval import evaluation_itm, evaluation_itc, mAP, save_failure_cases, retrieval_eval
 
 
 def main(args, config):
@@ -64,30 +65,61 @@ def main(args, config):
         model_without_ddp = model.module
 
     print("### Creating search dataset")
-    train_dataset, test_dataset = create_dataset(config, args.evaluate)
+    train_dataset, test_dataset = create_dataset(args.task, config, args.evaluate)
 
     start_time = time.time()
 
+    # ===================================================
+    # 1. Evaluation Mode (Restored Original Logic)
+    # ===================================================
     if args.evaluate:
-        print("### Start evaluating")
+        print("### Start evaluating (Original 89.33 Logic)")
         test_loader = create_loader([test_dataset], [None],
                                     batch_size=[config['batch_size_test']],
                                     num_workers=[4],
                                     is_trains=[False],
                                     collate_fns=[None])[0]
 
+        # 1. ?? ITC (?????? flat list ? text embeds)
+        # ??:???? grouped ?? original
         sims_matrix_t2i, image_embeds, text_embeds, text_atts = evaluation_itc(
             model_without_ddp, test_loader, tokenizer, device, config)
 
+        # 2. ?? ITM (?? flat list)
         score_test_t2i = evaluation_itm(model_without_ddp, device, config, args,
-                                        sims_matrix_t2i, image_embeds, text_embeds, text_atts)
+                                        sims_matrix_t2i, image_embeds, 
+                                        text_embeds, text_atts)
 
         if utils.is_main_process():
             print('test_result:')
             mAP(score_test_t2i, test_loader.dataset.g_pids, test_loader.dataset.q_pids)
+            
+            # Save Failure Cases
+            save_failure_cases(
+                score_test_t2i, 
+                test_loader.dataset.g_pids,  
+                test_loader.dataset.q_pids,  
+                test_loader.dataset,         
+                args.output_dir              
+            )
+            
+            # Generate candidates.json for Qwen
+            retrieval_eval(
+                None, 
+                score_test_t2i, 
+                test_loader.dataset.q_pids, 
+                test_loader.dataset.g_pids, 
+                queries=test_loader.dataset.text,
+                image_paths=test_loader.dataset.image, 
+                args=args, 
+                topk=5
+            )
 
         dist.barrier()
 
+    # ===================================================
+    # 2. Training Mode
+    # ===================================================
     else:
         print("### Start training")
         train_dataset_size = len(train_dataset)
@@ -118,7 +150,7 @@ def main(args, config):
         arg_sche['step_per_epoch'] = math.ceil(train_dataset_size / (config['batch_size_train'] * world_size))
         lr_scheduler = create_scheduler(arg_sche, optimizer)
 
-        scaler = GradScaler()  # bf16
+        scaler = GradScaler()
 
         mask_generator = TextMaskingGenerator(tokenizer, config['mask_prob'], config['max_masks'],
                                               config['skipgram_prb'], config['skipgram_size'],
@@ -127,48 +159,54 @@ def main(args, config):
         best = 0
         best_epoch = 0
         max_epoch = config['schedular']['epochs']
+        
         for epoch in range(0, max_epoch):
             if args.distributed:
                 train_loader.sampler.set_epoch(epoch)
 
+            # Train
             train_stats = train_model(model, train_loader, optimizer, scaler, tokenizer, epoch,
                                       device, lr_scheduler, config, mask_generator)
 
-            # sims_matrix_t2i, image_embeds, text_embeds, text_atts = evaluation_itc(
-            #     model_without_ddp, test_loader, tokenizer, device, config)
+            # Evaluate (Original Logic)
+            # ??:????? text_embeds, text_atts
+            sims_matrix_t2i, image_embeds, text_embeds, text_atts = evaluation_itc(
+                model_without_ddp, test_loader, tokenizer, device, config)
 
-            # score_test_t2i = evaluation_itm(model_without_ddp, device, config, args,
-            #                                 sims_matrix_t2i, image_embeds, text_embeds, text_atts,)
+            score_test_t2i = evaluation_itm(model_without_ddp, device, config, args,
+                                            sims_matrix_t2i, image_embeds, 
+                                            text_embeds, text_atts)
 
-            # del sims_matrix_t2i, image_embeds, text_embeds, text_atts
+            # Cleanup
+            del sims_matrix_t2i, image_embeds, text_embeds, text_atts
 
-            # if utils.is_main_process():
-            #     test_result = mAP(score_test_t2i, test_loader.dataset.g_pids, test_loader.dataset.q_pids, table)
-            #     table.add_row([epoch, test_result['R1'], test_result['R5'], test_result['R10'],
-            #                    test_result['mAP'], test_result['mINP']])
-            #     print(table)
+            if utils.is_main_process():
+                test_result = mAP(score_test_t2i, test_loader.dataset.g_pids, test_loader.dataset.q_pids, table)
+                
+                if epoch == 0:
+                    print(table.get_string(start=0, end=1))
+                table.add_row([epoch, test_result['R1'], test_result['R5'], test_result['R10'],
+                               test_result['mAP'], test_result['mINP']])
+                print(table.get_string(start=table.rowcount-1, end=table.rowcount))
 
-            #     logs = {'epo': epoch}
-            #     for k, v in test_result.items():
-            #         logs[k] = np.around(v, 3)
-            #     for k, v in train_stats.items():
-            #         logs[k] = float(v)
-            #     print('logs', logs)
+                logs = {'epoch': epoch}
+                for k, v in test_result.items():
+                    logs[k] = float(np.around(v, 3))
+                for k, v in train_stats.items():
+                    logs[k] = float(v)
+                print('logs:', logs)
 
-            #     for k, v in logs.items():
-            #         logs[k] = str(v)
-            #     with open(os.path.join(args.output_dir, "log.txt"), "a") as f:
-            #         f.write(json.dumps(logs) + "\n")
+                with open(os.path.join(args.output_dir, "log.txt"), "a") as f:
+                    f.write(json.dumps(logs) + "\n")
 
-            #     result = test_result['R1']
-            #     if result > best:
-            #         save_obj = {'model': model_without_ddp.state_dict(), 'config': config, }
-            #         torch.save(save_obj, os.path.join(args.output_dir, 'checkpoint_best.pth'))
-            #         best = result
-            #         best_epoch = epoch
-            save_obj = {'model': model_without_ddp.state_dict(), 'config': config, }
-            torch.save(save_obj, os.path.join(args.output_dir, 'checkpoint_best'+str(epoch)+'.pth'))
-            best_epoch = epoch
+                result = test_result['R1']
+                if result > best:
+                    print(f"### New best score: {result:.2f} at epoch {epoch}. Saving model... ###")
+                    save_obj = {'model': model_without_ddp.state_dict(), 'config': config}
+                    torch.save(save_obj, os.path.join(args.output_dir, 'checkpoint_best.pth'))
+                    best = result
+                    best_epoch = epoch
+            
             dist.barrier()
             torch.cuda.empty_cache()
 
@@ -176,12 +214,11 @@ def main(args, config):
             with open(os.path.join(args.output_dir, "log.txt"), "a") as f:
                 f.write("best epoch: %d" % best_epoch)
             print("### best epoch: %d" % best_epoch)
-            # os.system(f"cat {args.output_dir}/log.txt")
+            os.system(f"cat {args.output_dir}/log.txt")
 
             total_time = time.time() - start_time
             total_time_str = str(datetime.timedelta(seconds=int(total_time)))
             print('### Time {}'.format(total_time_str))
-
 
 
 if __name__ == '__main__':

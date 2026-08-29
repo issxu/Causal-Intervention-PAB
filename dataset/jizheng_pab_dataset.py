@@ -143,7 +143,7 @@ class search_train_dataset(Dataset):
 class search_test_dataset(Dataset):
     def __init__(self, config, transform):
         self.transform = transform
-        self.path = "/home/weifeng/x2vlm/data/PAB/test/"
+        self.path = "/home/user/mc56486/data/PAB/test/"
         self.image_root = os.listdir(self.path)
         self.image_root = sorted(self.image_root)
         self.max_words = config['max_words']

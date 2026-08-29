@@ -4,11 +4,10 @@ from random import randint, shuffle
 from random import random as rand
 import numpy as np
 from PIL import Image
-
+from collections import defaultdict
 from torch.utils.data import Dataset
 
 from dataset.utils import pre_caption, read_json_to_list
-
 
 class TextMaskingGenerator:
     def __init__(self, tokenizer, mask_prob, mask_max, skipgram_prb=0.2, skipgram_size=3, mask_whole_word=True,
@@ -96,8 +95,10 @@ class TextMaskingGenerator:
                 text_ids[pos] = self.get_random_word()
 
         return text_ids, masked_pos
-
-
+        
+        
+        
+        
 class search_train_dataset(Dataset):
     def __init__(self, config, transform):
         self.image_root = config['image_root']
@@ -105,37 +106,45 @@ class search_train_dataset(Dataset):
         self.max_words = config['max_words']
         self.eda_p = config['eda_p']
 
-        self.be_hard = config.get('be_hard', False)
-        self.be_pose_img = config.get('be_pose_img', False)
-        print('train dataset -->    be_hard:', self.be_hard, '    be_pose_img:', self.be_pose_img)
-
-        ann_file = config['train_file']
-        self.ann = []
-        for f in ann_file:
+        ann_file_list = config['train_file']
+        
+        # --- ??? ????:????? ??? ---
+        
+        # 1. ??????,??? image ???????????
+        self.ann_by_image = defaultdict(list)
+        
+        for f in ann_file_list:
             anns = read_json_to_list(f)
             for item in anns:
-                self.ann.append(item)
+                self.ann_by_image[item['image']].append(item)
+        
+        # 2. ???????? image ????,??????????
+        self.image_paths = sorted(self.ann_by_image.keys())
+        
+        print(f"Total unique images for training (this is the dataset length): {len(self.image_paths)}")
 
+        # --- img_ids ????? ---
         self.img_ids = {}
         n = 0
-        for ann in self.ann:
-            img_id = ann['image_id']
-            if img_id not in self.img_ids.keys():
+        for img_path in self.image_paths:
+            img_id = self.ann_by_image[img_path][0]['image_id']
+            if img_id not in self.img_ids:
                 self.img_ids[img_id] = n
                 n += 1
-
-            if self.be_hard:
-                img_id = ann['hard_i_id']
-                if img_id not in self.img_ids.keys():
-                    self.img_ids[img_id] = n
-                    n += 1
-        print('image ids:', n)
+        print('Total unique image_ids:', n)
 
     def __len__(self):
-        return len(self.ann)
+        # ??? ??:????????????????????
+        return len(self.image_paths)
 
     def __getitem__(self, index):
-        ann = self.ann[index]
+        # 1. ?????????????
+        image_path_key = self.image_paths[index]
+        
+        # 2. ??? ??:??????????caption???,???????????
+        ann = random.choice(self.ann_by_image[image_path_key])
+        
+        # --- 3. ???????????????? ann ---
         image_path = os.path.join(self.image_root, ann['image'])
         image = Image.open(image_path).convert('RGB')
         image = self.transform(image)
@@ -144,60 +153,47 @@ class search_train_dataset(Dataset):
 
         cap = ann['caption']
         caption = pre_caption(cap, self.max_words)
-
-        if self.be_hard:
-            hard_caption = pre_caption(ann['hard_c'], self.max_words)
-        else:
-            hard_caption = {}
-
         caption_eda = pre_caption(cap, self.max_words, True, self.eda_p)
 
-        if self.be_pose_img:
-            pose_path = os.path.join(self.image_root, 'pose/' + ann['image'])
-            pose = Image.open(pose_path).convert('RGB')
-            pose = self.transform(pose)
-        else:
-            pose = {}
-
-        if self.be_hard:
-            hard_path = os.path.join(self.image_root, 'train/' + ann['hard_i'])
-            hard_i = Image.open(hard_path).convert('RGB')
-            hard_i= self.transform(hard_i)
-            if self.be_pose_img:
-                hard_pose_path = os.path.join(self.image_root, 'pose/train/' + ann['hard_i'])
-                hard_i_pose = Image.open(hard_pose_path).convert('RGB')
-                hard_i_pose = self.transform(hard_i_pose)
-            else:
-                hard_i_pose = {}
-        else:
-            hard_i = {}
-            hard_i_pose = {}
-
-        return image, caption, caption_eda, self.img_ids[img_id], pose, hard_i, hard_i_pose, hard_caption
-
-
+        # ????????,???4??,??? train_xvlm2.py ??
+        return image, caption, caption_eda, self.img_ids[img_id]
+        
 class search_test_dataset(Dataset):
     def __init__(self, config, transform):
         ann_file = config['test_file']
         self.transform = transform
         self.image_root = config.get('image_root_test', config['image_root'])
         self.max_words = config['max_words']
-
+    
         self.ann = read_json_to_list(ann_file)
-
+    
         self.be_pose_img = config.get('be_pose_img', False)
         print('test dataset -->    be_pose_img:', self.be_pose_img)
-
-        self.text = []
-        self.image = []
-        self.g_pids = []
-        self.q_pids = []
-        for img_id, ann in enumerate(self.ann):
-            self.g_pids.append(ann['image_id'])
-            self.image.append(ann['image'])
-            for i, caption in enumerate(ann['caption']):
-                self.q_pids.append(ann['image_id'])
-                self.text.append(pre_caption(caption, self.max_words))
+    
+        # === ??? ?????? ??? ===
+        
+        self.image = []   # ?????? image ??
+        self.g_pids = []  # ???????? image_id
+        
+        # self.text ??????????, e.g., [['capA1', 'capA2'], ['capB1', 'capB2']]
+        self.text = [] 
+        
+        self.q_pids = [] # ??????????? image_id ?? query_id
+    
+        for ann_item in self.ann:
+            self.image.append(ann_item['image'])
+            self.g_pids.append(ann_item['image_id'])
+            
+            # ?? caption ???????
+            captions = ann_item['caption']
+            if isinstance(captions, str):
+                captions = [captions] # ????????,???????
+            
+            # ??? caption ?????,????
+            processed_captions = [pre_caption(cap, self.max_words) for cap in captions]
+            self.text.append(processed_captions)
+            
+            self.q_pids.append(ann_item['image_id'])
 
     def __len__(self):
         return len(self.image)

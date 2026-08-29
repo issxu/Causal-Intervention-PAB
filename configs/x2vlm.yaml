@@ -121,7 +121,7 @@ skipgram_size: 3
 mask_whole_word: True
 
 optimizer: {opt: adamW, lr: 1e-4, weight_decay: 0.01, lr_mult: 2}
-schedular: {sched: step, lr: 1e-4, epochs: 10, num_warmup_steps: 500}
+schedular: {sched: step, lr: 1e-4, epochs: 30, num_warmup_steps: 500}
 
 k_test: 128
 

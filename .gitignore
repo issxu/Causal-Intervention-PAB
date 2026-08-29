@@ -28,3 +28,44 @@ results*/
 .vscode/
 .idea/
 .DS_Store
+
+# Training outputs and logs
+output/
+slurm_logs/
+wandb/
+runs/
+
+# Datasets and model weights
+data/
+datasets/
+checkpoints/
+pretrained/
+*.pt
+*.pth
+*.ckpt
+*.bin
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Logs and temporary files
+*.log
+*.out
+*.err
+*.tmp
+
+# Credentials and local settings
+.env
+.env.*
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
+
+

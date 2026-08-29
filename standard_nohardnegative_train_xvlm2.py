@@ -1,13 +1,8 @@
-import math
-
 import torch
-from torch.cuda.amp import autocast
-
+import torch.nn.functional as F
 import utils
 
-
-
-
+# MLM ??????
 def mlm(text, text_input, tokenizer, device, mask_generator, config):
     text_masked = tokenizer(text, padding='max_length', truncation=True, max_length=config['max_tokens'],
                             return_tensors="pt").to(device)
@@ -26,7 +21,6 @@ def mlm(text, text_input, tokenizer, device, mask_generator, config):
         masked_ids[index] = masked_ids_
     return text_ids_masked, masked_pos, masked_ids
 
-
 def train_model(model, data_loader, optimizer, scaler, tokenizer, epoch, device, scheduler, config, mask_generator):
     model.train()
 
@@ -34,48 +28,61 @@ def train_model(model, data_loader, optimizer, scaler, tokenizer, epoch, device,
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('loss_itc', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
     metric_logger.add_meter('loss_itm', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
-    # metric_logger.add_meter('loss_mlm', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
+    metric_logger.add_meter('loss_mlm', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
     metric_logger.add_meter('loss', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
+    
     header = 'Train Epoch: [{}]'.format(epoch)
     print_freq = 50
 
+    # [??????] ????? 4 ???
     for i, (image, text, text_eda, idx) in enumerate(
             metric_logger.log_every(data_loader, print_freq, header)):
 
         image = image.to(device, non_blocking=True)
+        idx = idx.to(device, non_blocking=True)
+
+        # 1. Tokenize ???
         text_input = tokenizer(text, padding='max_length', truncation=True, max_length=config['max_tokens'],
                                return_tensors="pt").to(device)
+        
+        # 2. [??????] Tokenize EDA ??
         text_input_eda = tokenizer(text_eda, padding='max_length', truncation=True, max_length=config['max_tokens'],
                                    return_tensors="pt").to(device)
         text_ids_eda = text_input_eda.input_ids
         text_atts_eda = text_input_eda.attention_mask
 
-        idx = idx.to(device, non_blocking=True)
+        # MLM ??
+        text_ids_masked, masked_pos, masked_ids = mlm(text, text_input, tokenizer, device, mask_generator, config)
 
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-            loss_itc, loss_itm = \
-                model(image, text_input.input_ids, text_input.attention_mask,
-                     
-                      idx=idx, text_ids_eda=text_ids_eda, text_atts_eda=text_atts_eda,)
-            loss =  loss_itc + loss_itm 
+            # [??????] ?????????? model ? 3 ??? loss
+            # ??:???? text_ids_eda ? text_atts_eda
+            loss_itc, loss_itm, loss_mlm = model(
+                image, text_input.input_ids, text_input.attention_mask,
+                text_ids_masked=text_ids_masked, masked_pos=masked_pos, masked_ids=masked_ids,
+                idx=idx, 
+                text_ids_eda=text_ids_eda, 
+                text_atts_eda=text_atts_eda
+            )
+            
+            # ? Loss ???????? Loss
+            loss = loss_itc + loss_itm + loss_mlm
 
         scaler.scale(loss).backward()
-
         scaler.step(optimizer)
         scale = scaler.get_scale()
-        scaler.update()
-        skip_lr_sched = (scale > scaler.get_scale())
+        scaler.update()  
+        skip_lr_sched = (scale > scaler.get_scale()) 
         if not skip_lr_sched:
             scheduler.step()
         optimizer.zero_grad()
 
         metric_logger.update(loss_itc=loss_itc.item())
         metric_logger.update(loss_itm=loss_itm.item())
+        metric_logger.update(loss_mlm=loss_mlm.item())
         metric_logger.update(loss=loss.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
-    # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger.global_avg())
     return {k: "{:.5f}".format(meter.global_avg) for k, meter in metric_logger.meters.items()}
-

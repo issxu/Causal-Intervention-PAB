@@ -1,17 +1,18 @@
-image_root: '/home/weifeng/x2vlm/data/PAB/'
-test_file: '/home/weifeng/x2vlm/data/PAB/annotation/test/attr.json'
+image_root: '/home/user/mc56486/data/PAB/'
+test_file: '/home/user/mc56486/data/PAB/annotation/test/attr.json'
 
-train_file:  [
-    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_0.json',
-    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_1.json',
-    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_2.json',
-    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_3.json',
-    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_4.json',
-    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_5.json',
-    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_6.json',
-    '/home/weifeng/x2vlm/data/PAB/annotation/train/attr_7.json',
-
+train_file: [
+    '/home/user/mc56486/data/PAB/annotation/train/attr_0.json',
+    '/home/user/mc56486/data/PAB/annotation/train/attr_1.json',
+    '/home/user/mc56486/data/PAB/annotation/train/attr_2.json',
+    '/home/user/mc56486/data/PAB/annotation/train/attr_3.json',
+    '/home/user/mc56486/data/PAB/annotation/train/attr_4.json',
+    '/home/user/mc56486/data/PAB/annotation/train/attr_5.json',
+    '/home/user/mc56486/data/PAB/annotation/train/attr_6.json',
+    '/home/user/mc56486/data/PAB/annotation/train/attr_7.json'
 ]
+
+
 
 
 ## Image Encoder
@@ -24,22 +25,22 @@ w: 224
 
 ## Text Encoder
 text_config: 'configs/config_bert_xlvm2.json'
-text_encoder: '/home/weifeng/x2vlm/checkpoint/bert-base-uncased/'
+text_encoder: '/home/user/mc56486/bert-base-uncased/'
 # text_encoder: '/home/jizheng/CMP_Baseline_Code/checkpointxvlm/GeoText1652_model/bert'
-# text_num_hidden_layers: 18  # include cross
-# text_fusion_start_at: 12
+#text_num_hidden_layers: 18  # include cross
+#text_fusion_start_at: 12
 
 ## Training
 load_params: False
 load_pretrained: True
 
-max_words: 56
-max_tokens: 56
-eda_p: 1
-erasing_p: 0.6
+max_words: 80
+max_tokens: 80
+eda_p: 0
+erasing_p: 0.3
 
-batch_size_train: 80
-batch_size_test: 44
+batch_size_train: 120
+batch_size_test: 160
 batch_size_test_text: 150
 
 embed_dim: 2048
@@ -55,7 +56,7 @@ skipgram_size: 3
 mask_whole_word: True
 
 optimizer: {opt: adamW, lr: 1e-4, weight_decay: 0.01, lr_mult: 2}
-schedular: {sched: step, lr: 1e-4, epochs: 30, num_warmup_steps: 500}
+schedular: {sched: step, lr: 1e-5, epochs: 100, num_warmup_steps: 500}
 
 k_test: 128
 

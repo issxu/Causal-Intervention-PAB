@@ -1,1 +1,0 @@
-python3 run_coco.py --task "my_more_more_coco" --dist "f3" --output_dir "output/my_ori_coco" --checkpoint "checkpointxvlm/checkpoint_9.pth"
